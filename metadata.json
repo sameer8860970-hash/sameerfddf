@@ -1,0 +1,5 @@
+{
+  "name": "DeepThink Canvas",
+  "description": "A real-time technical reasoning worksheet where an AI interrogates your engineering decisions line-by-line.",
+  "requestFramePermissions": []
+}
