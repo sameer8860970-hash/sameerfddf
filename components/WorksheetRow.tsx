@@ -42,72 +42,92 @@ export const WorksheetRow: React.FC<WorksheetRowProps> = ({
   };
 
   const isLocked = row.status === RowStatus.Completed || row.status === RowStatus.Analyzing || row.status === RowStatus.Locked;
+  const isActive = row.status === RowStatus.Active;
 
   return (
-    <div className={`group flex flex-col md:flex-row border-b border-slate-200 transition-colors duration-300 ${isLocked ? 'bg-slate-50' : 'bg-white'}`}>
+    <div className={`relative flex gap-6 md:gap-8 pb-8 ${isLast ? 'last-item' : ''}`}>
+      {/* Timeline Connector */}
+      <div className="timeline-line"></div>
+
       {/* Left: Step Indicator */}
-      <div className="w-full md:w-16 p-4 flex md:flex-col items-center md:items-start justify-between md:justify-start text-slate-400 font-mono text-sm select-none border-b md:border-b-0 md:border-r border-slate-100">
-        <span className={isLocked ? "text-slate-400" : "text-brand-600 font-bold"}>
+      <div className="relative z-10 shrink-0 flex flex-col items-center w-16 pt-2">
+        <div className={`
+          flex items-center justify-center w-10 h-10 rounded-full border-2 font-mono text-sm transition-all duration-300
+          ${isActive 
+            ? 'bg-brand-600 border-brand-600 text-white shadow-lg shadow-brand-500/30 scale-110' 
+            : 'bg-white border-brand-200 text-brand-400'}
+        `}>
           {String(row.stepNumber).padStart(2, '0')}
-        </span>
-        {row.depthScore && (
-          <div className="flex items-center gap-1 mt-2 text-xs" title="Depth Score">
-             <span className={`w-2 h-2 rounded-full ${
-               row.depthScore >= 8 ? 'bg-green-500' : 
-               row.depthScore >= 5 ? 'bg-yellow-500' : 'bg-red-400'
-             }`}></span>
-             <span>{row.depthScore}/10</span>
-          </div>
-        )}
-      </div>
-
-      {/* Middle: User Input */}
-      <div className="flex-1 p-4 relative">
-        <textarea
-          ref={textareaRef}
-          value={row.content}
-          onChange={(e) => onChange(row.id, e.target.value)}
-          onKeyDown={handleKeyDown}
-          disabled={isLocked}
-          placeholder={isLast ? "Describe your next engineering step... (Enter to submit)" : ""}
-          className={`w-full bg-transparent resize-none outline-none font-mono text-slate-800 text-sm md:text-base placeholder:text-slate-300 leading-relaxed ${isLocked ? 'cursor-default' : ''}`}
-          rows={1}
-        />
-        {row.status === RowStatus.Active && (
-          <div className="absolute right-4 bottom-4 opacity-0 group-hover:opacity-100 transition-opacity">
-            <span className="text-xs text-brand-400 font-medium px-2 py-1 bg-brand-50 rounded border border-brand-100">
-              ⏎ to Analyze
-            </span>
-          </div>
-        )}
-      </div>
-
-      {/* Right: AI Interrogation */}
-      <div className={`w-full md:w-1/3 p-4 border-t md:border-t-0 md:border-l border-slate-100 transition-all duration-500 ${row.aiInterrogation ? 'bg-brand-50/30' : ''}`}>
-        {row.status === RowStatus.Analyzing && (
-          <div className="flex items-center gap-2 text-brand-600 text-sm font-medium animate-pulse">
-            <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            Reviewing logic...
-          </div>
-        )}
+        </div>
         
-        {row.aiInterrogation && (
-          <div className="animate-in fade-in slide-in-from-left-2 duration-500">
-            <div className="flex items-start gap-2">
-              <span className="mt-1 text-brand-600 shrink-0">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
-              </span>
-              <div>
-                <p className="text-sm text-brand-900 font-medium leading-relaxed">
-                  {row.aiInterrogation}
-                </p>
-              </div>
-            </div>
+        {row.depthScore && !isActive && (
+          <div className="mt-2 flex flex-col items-center animate-in fade-in slide-in-from-top-2">
+             <div className={`text-[10px] font-bold uppercase tracking-wider mb-0.5 ${
+               row.depthScore >= 8 ? 'text-brand-600' : 
+               row.depthScore >= 5 ? 'text-brand-400' : 'text-slate-400'
+             }`}>Depth</div>
+             <div className={`text-sm font-black ${
+               row.depthScore >= 8 ? 'text-brand-700' : 'text-slate-500'
+             }`}>{row.depthScore}/10</div>
           </div>
         )}
+      </div>
+
+      {/* Content Area */}
+      <div className={`flex-1 grid md:grid-cols-2 gap-6 items-start ${isActive ? 'opacity-100' : 'opacity-80 hover:opacity-100 transition-opacity'}`}>
+        
+        {/* User Input */}
+        <div className={`
+          relative rounded-xl border p-5 transition-all duration-300
+          ${isActive 
+            ? 'bg-white border-brand-300 shadow-xl shadow-brand-100 ring-4 ring-brand-50' 
+            : 'bg-white border-brand-100 shadow-sm'}
+        `}>
+          <textarea
+            ref={textareaRef}
+            value={row.content}
+            onChange={(e) => onChange(row.id, e.target.value)}
+            onKeyDown={handleKeyDown}
+            disabled={isLocked}
+            placeholder={isLast ? "Example: I'll use Redis for the hot cache due to..." : ""}
+            className={`w-full bg-transparent resize-none outline-none font-mono text-sm md:text-base leading-relaxed
+              ${isLocked ? 'text-brand-900 cursor-default' : 'text-brand-950 placeholder:text-brand-200'}
+            `}
+            rows={1}
+            spellCheck={false}
+          />
+          {isActive && (
+             <div className="absolute right-3 bottom-3 text-[10px] text-brand-300 font-mono border border-brand-100 rounded px-1.5 py-0.5 bg-brand-50">
+               PRESS ENTER
+             </div>
+          )}
+        </div>
+
+        {/* AI Interrogation */}
+        <div className="pt-2">
+           {row.status === RowStatus.Analyzing && (
+            <div className="flex items-center gap-3 text-brand-500 font-medium animate-pulse">
+              <div className="w-5 h-5 border-2 border-brand-200 border-t-brand-500 rounded-full animate-spin"></div>
+              <span className="text-sm">Principal Engineer is reviewing...</span>
+            </div>
+           )}
+
+           {row.aiInterrogation && (
+             <div className="relative animate-in fade-in slide-in-from-left-4 duration-500">
+               {/* Speech Bubble Arrow */}
+               <div className="absolute top-6 -left-2 w-4 h-4 bg-brand-50 border-l border-b border-brand-200 transform rotate-45 hidden md:block"></div>
+               
+               <div className="bg-brand-50 border border-brand-200 rounded-xl p-5 text-brand-900 shadow-sm">
+                 <div className="flex items-center gap-2 mb-2">
+                   <span className="text-xs font-bold text-brand-500 uppercase tracking-wider">Interrogation</span>
+                 </div>
+                 <p className="font-medium leading-relaxed text-sm">
+                   "{row.aiInterrogation}"
+                 </p>
+               </div>
+             </div>
+           )}
+        </div>
       </div>
     </div>
   );

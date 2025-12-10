@@ -1,25 +1,43 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ReasoningRow, RowStatus, Challenge, SessionResult } from './types';
 import { WorksheetRow } from './components/WorksheetRow';
 import { SessionReport } from './components/SessionReport';
 import { getSuggestedChallenges, interrogateRow, evaluateSession } from './services/geminiService';
 
+// Safe UUID generator
+const safeUUID = () => {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+};
+
 const App: React.FC = () => {
-  const [apiKey, setApiKey] = useState<string | undefined>(process.env.API_KEY);
+  const [apiKey] = useState<string | undefined>(process.env.API_KEY);
   const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [activeChallenge, setActiveChallenge] = useState<Challenge | null>(null);
   
   const [rows, setRows] = useState<ReasoningRow[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [sessionResult, setSessionResult] = useState<SessionResult | null>(null);
+  const [initError, setInitError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Initial load of challenges
     if (apiKey) {
       setIsLoading(true);
       getSuggestedChallenges()
-        .then(setChallenges)
-        .catch(console.error)
+        .then(data => {
+            if (data && data.length > 0) {
+                setChallenges(data);
+            }
+        })
+        .catch(err => {
+            console.error("Initialization error:", err);
+            setInitError("Failed to load challenges.");
+        })
         .finally(() => setIsLoading(false));
     }
   }, [apiKey]);
@@ -29,7 +47,7 @@ const App: React.FC = () => {
     setSessionResult(null);
     setRows([
       {
-        id: crypto.randomUUID(),
+        id: safeUUID(),
         stepNumber: 1,
         content: '',
         aiInterrogation: null,
@@ -47,15 +65,12 @@ const App: React.FC = () => {
     if (!row || !activeChallenge) return;
     if (row.status !== RowStatus.Active) return;
 
-    // 1. Lock current row and set to analyzing
     setRows(prev => prev.map(r => r.id === id ? { ...r, status: RowStatus.Analyzing } : r));
 
     try {
-      // 2. Call AI
       const previousRows = rows.filter(r => r.stepNumber < row.stepNumber);
       const analysis = await interrogateRow(row.content, previousRows, activeChallenge);
 
-      // 3. Update row with analysis
       setRows(prev => prev.map(r => r.id === id ? {
         ...r,
         status: RowStatus.Completed,
@@ -63,9 +78,8 @@ const App: React.FC = () => {
         depthScore: analysis.depthScore
       } : r));
 
-      // 4. Create next row
       const newRow: ReasoningRow = {
-        id: crypto.randomUUID(),
+        id: safeUUID(),
         stepNumber: row.stepNumber + 1,
         content: '',
         aiInterrogation: null,
@@ -77,6 +91,7 @@ const App: React.FC = () => {
     } catch (error) {
       console.error(error);
       setRows(prev => prev.map(r => r.id === id ? { ...r, status: RowStatus.Active } : r));
+      alert("Something went wrong analyzing your step. Please try again.");
     }
   };
 
@@ -84,7 +99,6 @@ const App: React.FC = () => {
     if (!activeChallenge) return;
     setIsLoading(true);
     
-    // Remove the last empty active row if it exists
     const validRows = rows.filter(r => r.status === RowStatus.Completed || r.content.trim().length > 0);
     
     try {
@@ -100,10 +114,10 @@ const App: React.FC = () => {
 
   if (!apiKey) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-        <div className="glass-panel p-8 rounded-xl max-w-md w-full text-center">
-            <h2 className="text-xl font-bold text-slate-800 mb-4">API Key Required</h2>
-            <p className="text-slate-600 mb-4">Please configure the environment variable correctly.</p>
+      <div className="min-h-screen bg-white flex items-center justify-center p-4 font-sans">
+        <div className="glass-panel p-8 rounded-xl max-w-md w-full text-center border border-brand-200 shadow-xl">
+            <h2 className="text-xl font-bold text-brand-900 mb-4">Configuration Error</h2>
+            <p className="text-brand-700 mb-4">API Key is missing.</p>
         </div>
       </div>
     );
@@ -112,55 +126,70 @@ const App: React.FC = () => {
   // 1. Landing / Challenge Selection
   if (!activeChallenge) {
     return (
-      <div className="min-h-screen bg-slate-50 relative overflow-hidden font-sans">
-        {/* Decorative Background */}
-        <div className="absolute top-0 left-0 w-full h-96 bg-gradient-to-b from-brand-100 to-transparent -z-10 opacity-50"></div>
+      <div className="min-h-screen bg-white relative font-sans text-slate-900 selection:bg-brand-100">
+        {/* Subtle Grid Background */}
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#f0f7ff_1px,transparent_1px),linear-gradient(to_bottom,#f0f7ff_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] pointer-events-none"></div>
         
-        <div className="max-w-5xl mx-auto px-6 py-20">
-          <header className="mb-16 text-center">
-            <h1 className="text-5xl font-extrabold text-slate-900 tracking-tight mb-4">
-              DeepThink <span className="text-brand-600">Canvas</span>
+        <div className="max-w-6xl mx-auto px-6 py-24 relative z-10">
+          <header className="mb-20 text-center">
+            <div className="inline-block mb-4 px-4 py-1.5 rounded-full bg-brand-50 border border-brand-100 text-brand-600 font-mono text-xs font-semibold tracking-wider uppercase">
+              System Design Interview Trainer
+            </div>
+            <h1 className="text-6xl md:text-7xl font-bold text-brand-950 tracking-tight mb-6">
+              DeepThink <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-600 to-brand-400">Canvas</span>
             </h1>
-            <p className="text-xl text-slate-600 max-w-2xl mx-auto">
-              Test your engineering intuition. An AI Principal Engineer watches every line you write and interrogates your reasoning in real-time.
+            <p className="text-xl text-brand-800/70 max-w-2xl mx-auto leading-relaxed">
+              Demonstrate your engineering depth in real-time. An AI Principal Engineer interrogates your reasoning line-by-line.
             </p>
           </header>
 
-          <div className="grid md:grid-cols-3 gap-6">
-            {isLoading ? (
+          <div className="grid md:grid-cols-3 gap-8">
+            {isLoading && challenges.length === 0 ? (
                Array.from({ length: 3 }).map((_, i) => (
-                 <div key={i} className="h-64 bg-white/50 rounded-xl animate-pulse border border-slate-200"></div>
+                 <div key={i} className="h-80 bg-brand-50/50 rounded-2xl animate-pulse border border-brand-100"></div>
                ))
             ) : (
-              challenges.map(challenge => (
+              challenges.map((challenge, idx) => (
                 <div 
                   key={challenge.id} 
                   onClick={() => startChallenge(challenge)}
-                  className="group bg-white rounded-xl p-8 border border-slate-200 shadow-sm hover:shadow-xl hover:border-brand-300 transition-all cursor-pointer relative overflow-hidden"
+                  className="group bg-white rounded-2xl p-8 border border-brand-100 hover:border-brand-300 shadow-sm hover:shadow-2xl hover:shadow-brand-200/50 transition-all duration-300 cursor-pointer flex flex-col h-full transform hover:-translate-y-1"
                 >
-                  <div className="absolute top-0 right-0 p-4 opacity-50 group-hover:opacity-100 transition-opacity">
-                    <span className={`text-xs font-bold px-2 py-1 rounded uppercase tracking-wide
-                      ${challenge.difficulty === 'Principal' ? 'bg-purple-100 text-purple-700' :
-                        challenge.difficulty === 'Staff' ? 'bg-brand-100 text-brand-700' :
-                        'bg-slate-100 text-slate-700'}
+                  <div className="flex justify-between items-start mb-6">
+                    <span className="font-mono text-brand-300 text-5xl font-light opacity-30 group-hover:opacity-100 transition-opacity">
+                      0{idx + 1}
+                    </span>
+                    <span className={`text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wide border
+                      ${challenge.difficulty === 'Principal' ? 'bg-brand-50 text-brand-700 border-brand-200' :
+                        challenge.difficulty === 'Staff' ? 'bg-slate-50 text-slate-600 border-slate-200' :
+                        'bg-slate-50 text-slate-500 border-slate-100'}
                     `}>
                       {challenge.difficulty}
                     </span>
                   </div>
-                  <h3 className="text-xl font-bold text-slate-800 mb-3 group-hover:text-brand-600 transition-colors">
+                  
+                  <h3 className="text-2xl font-bold text-brand-950 mb-4 group-hover:text-brand-600 transition-colors">
                     {challenge.title}
                   </h3>
-                  <p className="text-slate-600 text-sm leading-relaxed mb-6">
+                  
+                  <p className="text-brand-900/60 text-sm leading-relaxed mb-8 flex-grow">
                     {challenge.description}
                   </p>
-                  <div className="flex items-center text-brand-600 text-sm font-medium">
-                    Start Challenge 
-                    <svg className="w-4 h-4 ml-1 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
+                  
+                  <div className="flex items-center text-brand-600 font-semibold group-hover:translate-x-2 transition-transform duration-300">
+                    Start Session
+                    <svg className="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
                   </div>
                 </div>
               ))
             )}
           </div>
+          
+          {initError && (
+              <div className="text-center mt-12 text-red-500 bg-red-50 inline-block px-4 py-2 rounded-lg mx-auto">
+                  {initError} <button onClick={() => window.location.reload()} className="underline font-bold ml-2">Retry</button>
+              </div>
+          )}
         </div>
       </div>
     );
@@ -169,7 +198,7 @@ const App: React.FC = () => {
   // 3. Report View
   if (sessionResult) {
     return (
-      <div className="min-h-screen bg-slate-50 py-12">
+      <div className="min-h-screen bg-white py-12">
         <SessionReport 
           result={sessionResult} 
           challenge={activeChallenge} 
@@ -185,65 +214,61 @@ const App: React.FC = () => {
 
   // 2. Active Worksheet View
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
+    <div className="min-h-screen bg-white flex flex-col font-sans">
       {/* Header */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-10 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-             <div onClick={() => setActiveChallenge(null)} className="cursor-pointer font-bold text-xl text-slate-900">
-               DeepThink <span className="text-brand-600">Canvas</span>
+      <header className="bg-white/80 border-b border-brand-100 sticky top-0 z-20 backdrop-blur-xl">
+        <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-6">
+             <div onClick={() => setActiveChallenge(null)} className="cursor-pointer font-bold text-lg text-brand-950 tracking-tight flex items-center gap-2">
+               <span className="w-6 h-6 bg-brand-600 rounded-md flex items-center justify-center text-white text-xs font-mono">DT</span>
+               DeepThink
              </div>
-             <div className="h-6 w-px bg-slate-300 mx-2 hidden md:block"></div>
-             <div className="text-sm hidden md:block">
-               <span className="text-slate-500">Challenge:</span> <span className="font-medium text-slate-800">{activeChallenge.title}</span>
+             <div className="hidden md:flex items-center text-sm gap-2 px-3 py-1 bg-brand-50 rounded-full border border-brand-100">
+               <span className="w-2 h-2 rounded-full bg-brand-500 animate-pulse"></span>
+               <span className="text-brand-900 font-medium">{activeChallenge.title}</span>
              </div>
           </div>
           <button 
             onClick={finishSession}
             disabled={isLoading || rows.filter(r => r.status === RowStatus.Completed).length < 2}
-            className="px-4 py-2 bg-slate-900 text-white text-sm font-medium rounded-lg hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="px-5 py-2 bg-brand-950 text-white text-sm font-medium rounded-lg hover:bg-brand-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-brand-900/20"
           >
-            {isLoading ? 'Grading...' : 'Complete Session'}
+            {isLoading ? 'Grading Session...' : 'Submit Session'}
           </button>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 max-w-7xl mx-auto w-full p-4 md:p-8">
-        <div className="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden min-h-[600px] flex flex-col">
-          
-          {/* Instructions Banner */}
-          <div className="bg-slate-50 border-b border-slate-200 p-6">
-            <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-2">Context</h3>
-            <p className="text-slate-800 font-medium leading-relaxed">
-              {activeChallenge.context}
-            </p>
-            <p className="text-slate-500 text-sm mt-2">
-              Start typing your solution below. Press <kbd className="bg-white px-1.5 py-0.5 rounded border border-slate-300 mx-1">Enter</kbd> to submit a line for analysis.
-            </p>
-          </div>
+      <main className="flex-1 max-w-5xl mx-auto w-full p-6 md:p-8">
+        
+        {/* Context Card */}
+        <div className="mb-8 p-6 bg-brand-50/50 rounded-xl border border-brand-100/50 flex flex-col md:flex-row gap-6 items-start">
+           <div className="w-full md:w-2/3">
+             <h3 className="text-xs font-bold text-brand-400 uppercase tracking-widest mb-2">Technical Context</h3>
+             <p className="text-brand-950 font-medium leading-relaxed font-mono text-sm">
+               {activeChallenge.context}
+             </p>
+           </div>
+           <div className="w-full md:w-1/3 text-xs text-brand-500 bg-white p-4 rounded-lg border border-brand-100 shadow-sm">
+             <span className="font-bold block mb-1">Instructions:</span>
+             Type your engineering approach step-by-step. The AI will challenge your trade-offs in real-time.
+           </div>
+        </div>
 
-          {/* Canvas Area */}
-          <div className="flex-1 overflow-y-auto">
-            {rows.map((row, index) => (
-              <WorksheetRow
-                key={row.id}
-                row={row}
-                onChange={updateRow}
-                onSubmit={submitRow}
-                isLast={index === rows.length - 1}
-                autoFocus={index === rows.length - 1}
-              />
-            ))}
-            
-            {/* Empty State / Bottom Padding */}
-            {rows.length === 0 && (
-               <div className="p-12 text-center text-slate-400">
-                 Initializing workspace...
-               </div>
-            )}
-            <div className="h-32"></div>
-          </div>
+        {/* Canvas Area */}
+        <div className="space-y-0 relative">
+          {rows.map((row, index) => (
+            <WorksheetRow
+              key={row.id}
+              row={row}
+              onChange={updateRow}
+              onSubmit={submitRow}
+              isLast={index === rows.length - 1}
+              autoFocus={index === rows.length - 1}
+            />
+          ))}
+          
+          <div className="h-32"></div>
         </div>
       </main>
     </div>
